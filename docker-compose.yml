@@ -1,0 +1,55 @@
+version: "3.9"
+
+services:
+
+  # ─── Banco de desenvolvimento (porta 5432) ───────────────────────────────────
+  db:
+    image: postgres:15-alpine
+    container_name: produtos_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: produtos_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data   # volume nomeado — dados persistem
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d produtos_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ─── Banco exclusivo para testes (porta 5433) ────────────────────────────────
+  db_test:
+    image: postgres:15-alpine
+    container_name: produtos_db_test
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: produtos_test
+    ports:
+      - "5433:5432"
+    # Sem volume nomeado — dados de teste são descartáveis
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d produtos_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ─── Aplicação FastAPI ────────────────────────────────────────────────────────
+  api:
+    build: .
+    container_name: produtos_api
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/produtos_db
+      TEST_DATABASE_URL: postgresql://postgres:postgres@db_test:5432/produtos_test
+    depends_on:
+      db:
+        condition: service_healthy
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  postgres_data:   # Volume nomeado apenas para o banco de desenvolvimento
